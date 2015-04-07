@@ -49,14 +49,14 @@ func getCommands() []cli.Command {
 				handle := awsutil.StringValue(resp.Messages[0].ReceiptHandle)
 				handle = strings.Replace(handle, "\"", "", -1)
 
-				params2 := &sqs.DeleteMessageInput{
+				paramsDelete := &sqs.DeleteMessageInput{
 					QueueURL:      aws.String(queueURL), // Required
 					ReceiptHandle: aws.String(handle),   // Required
 				}
 
-				_, e := svc.DeleteMessage(params2)
+				_, err = svc.DeleteMessage(paramsDelete)
 
-				if awserr := aws.Error(e); awserr != nil {
+				if awserr := aws.Error(err); awserr != nil {
 					fmt.Println("Error:", awserr.Code, awserr.Message)
 				} else if err != nil {
 					panic(err)
