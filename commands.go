@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"strings"
+	"time"
 
 	"github.com/awslabs/aws-sdk-go/aws"
 	"github.com/awslabs/aws-sdk-go/aws/awsutil"
@@ -32,37 +33,48 @@ func getCommands() []cli.Command {
 			Action: func(c *cli.Context) {
 				reg := c.String("region")
 				queueURL := c.String("url")
-				svc := sqs.New(&aws.Config{Region: reg})
-				params := &sqs.ReceiveMessageInput{
-					QueueURL:            aws.String(queueURL),
-					MaxNumberOfMessages: aws.Long(1),
-					VisibilityTimeout:   aws.Long(1),
-					WaitTimeSeconds:     aws.Long(1),
+				for {
+					readMessage(reg, queueURL)
+					fmt.Println("Sleeping")
+					time.Sleep(1000)
 				}
-				resp, err := svc.ReceiveMessage(params)
-
-				if awserr := aws.Error(err); awserr != nil {
-					fmt.Println("Error:", awserr.Code, awserr.Message)
-				} else if err != nil {
-					panic(err)
-				}
-				handle := awsutil.StringValue(resp.Messages[0].ReceiptHandle)
-				handle = strings.Replace(handle, "\"", "", -1)
-
-				paramsDelete := &sqs.DeleteMessageInput{
-					QueueURL:      aws.String(queueURL), // Required
-					ReceiptHandle: aws.String(handle),   // Required
-				}
-
-				_, err = svc.DeleteMessage(paramsDelete)
-
-				if awserr := aws.Error(err); awserr != nil {
-					fmt.Println("Error:", awserr.Code, awserr.Message)
-				} else if err != nil {
-					panic(err)
-				}
-
 			},
 		},
 	}
+}
+
+func readMessage(region string, queueURL string) {
+	svc := sqs.New(&aws.Config{Region: region})
+	params := &sqs.ReceiveMessageInput{
+		QueueURL:            aws.String(queueURL),
+		MaxNumberOfMessages: aws.Long(1),
+		VisibilityTimeout:   aws.Long(1),
+		WaitTimeSeconds:     aws.Long(1),
+	}
+	resp, err := svc.ReceiveMessage(params)
+
+	if checkError(err) && len(resp.Messages) > 0 {
+		handle := awsutil.StringValue(resp.Messages[0].ReceiptHandle)
+		handle = strings.Replace(handle, "\"", "", -1)
+		body := awsutil.StringValue(resp.Messages[0])
+		fmt.Println("Message received: ", body)
+		paramsDelete := &sqs.DeleteMessageInput{
+			QueueURL:      aws.String(queueURL), // Required
+			ReceiptHandle: aws.String(handle),   // Required
+		}
+		_, err = svc.DeleteMessage(paramsDelete)
+		checkError(err)
+	}
+}
+
+func checkError(err error) (ok bool) {
+	ok = true
+	if awserr := aws.Error(err); awserr != nil {
+		fmt.Println("Error:", awserr.Code, awserr.Message)
+		ok = false
+	} else if err != nil {
+		ok = false
+		panic(err)
+	}
+	return ok
 }
